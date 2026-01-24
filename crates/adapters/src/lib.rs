@@ -26,7 +26,8 @@ pub(crate) mod logger {
 }
 
 pub mod platform {
-    pub use {slint, slint_interpreter};
+    pub use slint;
+    pub use slint_interpreter;
 
     pub mod calloop {
         pub use smithay_client_toolkit::reexports::calloop::generic::Generic;
