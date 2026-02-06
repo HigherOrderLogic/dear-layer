@@ -100,12 +100,12 @@ impl PopupContext {
     }
 }
 
-struct ActivePopup {
-    surface: PopupSurface,
+struct ActivePopup<S> {
+    surface: PopupSurface<S>,
     window: Rc<PopupWindow>,
 }
 
-impl Drop for ActivePopup {
+impl<S> Drop for ActivePopup<S> {
     fn drop(&mut self) {
         logger::info!("ActivePopup being dropped - cleaning up resources");
         self.window.cleanup_resources();
@@ -120,13 +120,13 @@ struct PendingPopup {
     height: f32,
 }
 
-struct PopupManagerState {
-    popups: HashMap<PopupId, ActivePopup>,
+struct PopupManagerState<S> {
+    popups: HashMap<PopupId, ActivePopup<S>>,
     display_metrics: SharedDisplayMetrics,
     pending_popups: VecDeque<PendingPopup>,
 }
 
-impl PopupManagerState {
+impl<S> PopupManagerState<S> {
     fn new(display_metrics: SharedDisplayMetrics) -> Self {
         Self {
             popups: HashMap::new(),
@@ -136,13 +136,13 @@ impl PopupManagerState {
     }
 }
 
-pub struct PopupManager {
+pub struct PopupManager<S> {
     context: PopupContext,
-    state: RefCell<PopupManagerState>,
+    state: RefCell<PopupManagerState<S>>,
     scale_factor: Cell<f32>,
 }
 
-impl PopupManager {
+impl<S> PopupManager<S> {
     #[must_use]
     pub fn new(context: PopupContext, display_metrics: SharedDisplayMetrics) -> Self {
         let scale_factor = display_metrics.borrow().scale_factor();
@@ -218,7 +218,7 @@ impl PopupManager {
 
     pub fn create_pending_popup(
         self: &Rc<Self>,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         last_pointer_serial: u32,
     ) -> Result<Rc<PopupWindow>> {
@@ -242,7 +242,7 @@ impl PopupManager {
 
     fn create_popup_internal(
         self: &Rc<Self>,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
         parent_layer_surface: &ZwlrLayerSurfaceV1,
         params: &CreatePopupParams,
         popup_id: PopupId,

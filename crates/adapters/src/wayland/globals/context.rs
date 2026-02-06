@@ -29,11 +29,11 @@ pub struct GlobalContext {
 }
 
 impl GlobalContext {
-    pub fn initialize(
+    pub fn initialize<S>(
         connection: &Connection,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
     ) -> Result<Self, LayerShikaError> {
-        let global_list = registry_queue_init::<AppState>(connection)
+        let global_list = registry_queue_init(connection)
             .map(|(global_list, _)| global_list)
             .map_err(|e| LayerShikaError::GlobalInitialization { source: e })?;
 

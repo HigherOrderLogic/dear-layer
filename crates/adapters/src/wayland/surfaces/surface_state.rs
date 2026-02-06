@@ -27,16 +27,16 @@ use wayland_client::{
 };
 use wayland_protocols::wp::fractional_scale::v1::client::wp_fractional_scale_v1::WpFractionalScaleV1;
 
-pub struct SurfaceState {
+pub struct SurfaceState<S> {
     component: ComponentState,
     rendering: RenderingState<FemtoVGWindow>,
-    event_context: RefCell<EventContext>,
+    event_context: RefCell<EventContext<S>>,
     display_metrics: SharedDisplayMetrics,
     #[allow(dead_code)]
     pointer: ManagedWlPointer,
 }
 
-impl SurfaceState {
+impl<S> SurfaceState<S> {
     pub fn new(builder: SurfaceStateBuilder) -> Result<Self> {
         let component_definition =
             builder
@@ -254,7 +254,7 @@ impl SurfaceState {
             .set_shared_pointer_serial(shared_serial);
     }
 
-    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
+    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager<S>>) {
         self.event_context
             .borrow_mut()
             .set_popup_manager(popup_manager);
@@ -320,12 +320,12 @@ impl SurfaceState {
             .update_scale_for_fractional_scale_object(fractional_scale_proxy, scale_120ths);
     }
 
-    pub fn popup_manager(&self) -> Option<Rc<PopupManager>> {
+    pub fn popup_manager(&self) -> Option<Rc<PopupManager<S>>> {
         self.event_context.borrow().popup_manager().cloned()
     }
 }
 
-impl ShellContextPort for SurfaceState {
+impl<S> ShellContextPort for SurfaceState<S> {
     fn render_frame_if_dirty(&mut self) -> CoreResult<(), DomainError> {
         SurfaceState::render_frame_if_dirty(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),

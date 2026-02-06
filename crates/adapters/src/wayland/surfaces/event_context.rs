@@ -40,10 +40,10 @@ impl SharedPointerSerial {
     }
 }
 
-pub struct EventContext {
+pub struct EventContext<S> {
     main_window: Rc<FemtoVGWindow>,
     main_surface_id: ObjectId,
-    popup_manager: Option<Rc<PopupManager>>,
+    popup_manager: Option<Rc<PopupManager<S>>>,
     display_metrics: SharedDisplayMetrics,
     pointer_state: PointerInputState,
     last_pointer_serial: u32,
@@ -52,7 +52,7 @@ pub struct EventContext {
     axis_source: Option<wl_pointer::AxisSource>,
 }
 
-impl EventContext {
+impl<S> EventContext<S> {
     #[must_use]
     pub fn new(
         main_window: Rc<FemtoVGWindow>,
@@ -72,11 +72,11 @@ impl EventContext {
         }
     }
 
-    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager>) {
+    pub fn set_popup_manager(&mut self, popup_manager: Rc<PopupManager<S>>) {
         self.popup_manager = Some(popup_manager);
     }
 
-    pub const fn popup_manager(&self) -> Option<&Rc<PopupManager>> {
+    pub const fn popup_manager(&self) -> Option<&Rc<PopupManager<S>>> {
         self.popup_manager.as_ref()
     }
 

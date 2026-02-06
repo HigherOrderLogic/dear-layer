@@ -19,13 +19,13 @@ use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
 
-pub struct SurfaceSetupParams<'a> {
+pub struct SurfaceSetupParams<'a, S> {
     pub compositor: &'a WlCompositor,
     pub output: &'a WlOutput,
     pub layer_shell: &'a ZwlrLayerShellV1,
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
-    pub queue_handle: &'a QueueHandle<AppState>,
+    pub queue_handle: &'a QueueHandle<AppState<S>>,
     pub layer: Layer,
     pub namespace: String,
 }
@@ -38,8 +38,8 @@ pub struct SurfaceCtx {
 }
 
 impl SurfaceCtx {
-    pub(crate) fn setup(
-        setup_params: &SurfaceSetupParams<'_>,
+    pub(crate) fn setup<S>(
+        setup_params: &SurfaceSetupParams<'_, S>,
         config: &LayerSurfaceConfig,
     ) -> Self {
         let surface = Rc::new(

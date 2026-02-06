@@ -75,10 +75,10 @@ impl SessionLockManager {
         self.state
     }
 
-    pub fn activate(
+    pub fn activate<S>(
         &mut self,
         outputs: impl IntoIterator<Item = WlOutput>,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
     ) -> Result<()> {
         if !self.state.can_activate() {
             return Err(LayerShikaError::InvalidInput {
@@ -153,10 +153,10 @@ impl SessionLockManager {
         self.input_state.reset();
     }
 
-    pub fn add_output(
+    pub fn add_output<S>(
         &mut self,
         output: &WlOutput,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
     ) -> Result<()> {
         if self.state != LockState::Locked {
             return Ok(());

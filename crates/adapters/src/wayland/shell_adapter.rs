@@ -41,7 +41,7 @@ use wayland_client::{
     protocol::{wl_pointer::WlPointer, wl_surface::WlSurface},
 };
 
-type PopupManagersAndSurfaces = (Vec<Rc<PopupManager>>, Vec<Rc<ZwlrLayerSurfaceV1>>);
+type PopupManagersAndSurfaces<S> = (Vec<Rc<PopupManager<S>>>, Vec<Rc<ZwlrLayerSurfaceV1>>);
 
 struct OutputSetup {
     output_id: ObjectId,
@@ -63,21 +63,21 @@ struct OutputManagerParams<'a> {
     shared_serial: &'a Rc<SharedPointerSerial>,
 }
 
-pub struct WaylandShellSystem {
-    state: AppState,
+pub struct WaylandShellSystem<S> {
+    state: AppState<S>,
     connection: Rc<Connection>,
-    event_queue: EventQueue<AppState>,
-    event_loop: EventLoop<'static, AppState>,
+    event_queue: EventQueue<AppState<S>>,
+    event_loop: EventLoop<'static, AppState<S>>,
 }
 
-impl WaylandShellSystem {
+impl WaylandShellSystem<()> {
     pub fn new(config: &WaylandSurfaceConfig) -> Result<Self> {
         logger::info!("Initializing WindowingSystem");
         let (connection, mut event_queue) = Self::init_wayland_connection()?;
         let event_loop =
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
-        let state = Self::init_state(config, &connection, &mut event_queue)?;
+        let state = Self::init_state(config, &connection, &mut event_queue, ())?;
 
         Ok(Self {
             state,
@@ -100,7 +100,7 @@ impl WaylandShellSystem {
         let event_loop =
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
-        let state = Self::init_state_multi(configs, &connection, &mut event_queue)?;
+        let state = Self::init_state_multi(configs, &connection, &mut event_queue, ())?;
 
         Ok(Self {
             state,
@@ -116,7 +116,7 @@ impl WaylandShellSystem {
         let event_loop =
             EventLoop::try_new().map_err(|e| EventLoopError::Creation { source: e })?;
 
-        let state = Self::init_state_minimal(&connection, &mut event_queue)?;
+        let state = Self::init_state_minimal(&connection, &mut event_queue, ())?;
 
         Ok(Self {
             state,
@@ -125,8 +125,10 @@ impl WaylandShellSystem {
             event_loop,
         })
     }
+}
 
-    fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<AppState>)> {
+impl<S> WaylandShellSystem<S> {
+    fn init_wayland_connection() -> Result<(Rc<Connection>, EventQueue<AppState<S>>)> {
         let connection = Rc::new(Connection::connect_to_env()?);
         let event_queue = connection.new_event_queue();
         Ok((connection, event_queue))
@@ -147,7 +149,7 @@ impl WaylandShellSystem {
         config: &WaylandSurfaceConfig,
         global_ctx: &GlobalContext,
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
+        event_queue: &mut EventQueue<AppState<S>>,
         pointer: &Rc<WlPointer>,
         layer_surface_config: &LayerSurfaceConfig,
     ) -> Result<Vec<OutputSetup>> {
@@ -252,8 +254,8 @@ impl WaylandShellSystem {
         setups: Vec<OutputSetup>,
         popup_context: &PopupContext,
         shared_serial: &Rc<SharedPointerSerial>,
-        app_state: &mut AppState,
-    ) -> Result<PopupManagersAndSurfaces> {
+        app_state: &mut AppState<S>,
+    ) -> Result<PopupManagersAndSurfaces<S>> {
         let mut popup_managers = Vec::new();
         let mut layer_surfaces = Vec::new();
 
@@ -290,8 +292,9 @@ impl WaylandShellSystem {
     fn init_state(
         config: &WaylandSurfaceConfig,
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
-    ) -> Result<AppState> {
+        event_queue: &mut EventQueue<AppState<S>>,
+        substate: S,
+    ) -> Result<AppState<S>> {
         let global_ctx = Rc::new(GlobalContext::initialize(
             connection,
             &event_queue.handle(),
@@ -302,10 +305,11 @@ impl WaylandShellSystem {
         let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
-        let mut app_state = AppState::new(
+        let mut app_state = AppState::new_with_substate(
             ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
             ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
+            substate,
         );
 
         app_state.set_queue_handle(event_queue.handle());
@@ -366,8 +370,9 @@ impl WaylandShellSystem {
     fn init_state_multi(
         configs: &[ShellSurfaceConfig],
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
-    ) -> Result<AppState> {
+        event_queue: &mut EventQueue<AppState<S>>,
+        substate: S,
+    ) -> Result<AppState<S>> {
         let global_ctx = Rc::new(GlobalContext::initialize(
             connection,
             &event_queue.handle(),
@@ -377,10 +382,11 @@ impl WaylandShellSystem {
         let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
-        let mut app_state = AppState::new(
+        let mut app_state = AppState::new_with_substate(
             ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
             ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
+            substate,
         );
 
         app_state.set_queue_handle(event_queue.handle());
@@ -444,8 +450,9 @@ impl WaylandShellSystem {
 
     fn init_state_minimal(
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
-    ) -> Result<AppState> {
+        event_queue: &mut EventQueue<AppState<S>>,
+        substate: S,
+    ) -> Result<AppState<S>> {
         let global_ctx = Rc::new(GlobalContext::initialize(
             connection,
             &event_queue.handle(),
@@ -455,10 +462,11 @@ impl WaylandShellSystem {
         let keyboard = Rc::new(global_ctx.seat.get_keyboard(&event_queue.handle(), ()));
         let shared_serial = Rc::new(SharedPointerSerial::new());
 
-        let mut app_state = AppState::new(
+        let mut app_state = AppState::new_with_substate(
             ManagedWlPointer::new(Rc::clone(&pointer), Rc::new(connection.clone())),
             ManagedWlKeyboard::new(Rc::clone(&keyboard), Rc::new(connection.clone())),
             Rc::clone(&shared_serial),
+            substate,
         );
 
         app_state.set_queue_handle(event_queue.handle());
@@ -480,7 +488,7 @@ impl WaylandShellSystem {
         configs: &[ShellSurfaceConfig],
         global_ctx: &GlobalContext,
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
+        event_queue: &mut EventQueue<AppState<S>>,
         pointer: &Rc<WlPointer>,
     ) -> Result<Vec<OutputSetup>> {
         let layer_shell =
@@ -598,10 +606,10 @@ impl WaylandShellSystem {
     }
 
     fn setup_shared_popup_creator(
-        popup_managers: Vec<Rc<PopupManager>>,
+        popup_managers: Vec<Rc<PopupManager<S>>>,
         layer_surfaces: Vec<Rc<ZwlrLayerSurfaceV1>>,
         platform: &Rc<CustomSlintPlatform>,
-        queue_handle: &QueueHandle<AppState>,
+        queue_handle: &QueueHandle<AppState<S>>,
         shared_serial: &Rc<SharedPointerSerial>,
     ) {
         let Some(first_manager) = popup_managers.first() else {
@@ -670,7 +678,7 @@ impl WaylandShellSystem {
         Ok(femtovg_window)
     }
 
-    pub fn event_loop_handle(&self) -> LoopHandle<'static, AppState> {
+    pub fn event_loop_handle(&self) -> LoopHandle<'static, AppState<S>> {
         self.event_loop.handle()
     }
 
@@ -743,8 +751,8 @@ impl WaylandShellSystem {
 
     fn process_events(
         connection: &Connection,
-        event_queue: &mut EventQueue<AppState>,
-        shared_data: &mut AppState,
+        event_queue: &mut EventQueue<AppState<S>>,
+        shared_data: &mut AppState<S>,
     ) -> Result<()> {
         if let Some(guard) = event_queue.prepare_read() {
             guard
@@ -797,7 +805,7 @@ impl WaylandShellSystem {
             .map(SurfaceState::component_instance)
     }
 
-    pub fn state(&self) -> Result<&SurfaceState> {
+    pub fn state(&self) -> Result<&SurfaceState<S>> {
         self.state
             .primary_output()
             .ok_or_else(|| LayerShikaError::InvalidInput {
@@ -805,11 +813,11 @@ impl WaylandShellSystem {
             })
     }
 
-    pub fn app_state(&self) -> &AppState {
+    pub fn app_state(&self) -> &AppState<S> {
         &self.state
     }
 
-    pub fn app_state_mut(&mut self) -> &mut AppState {
+    pub fn app_state_mut(&mut self) -> &mut AppState<S> {
         &mut self.state
     }
 
@@ -846,7 +854,7 @@ impl WaylandShellSystem {
     }
 }
 
-impl ShellSystemPort for WaylandShellSystem {
+impl<S> ShellSystemPort for WaylandShellSystem<S> {
     fn run(&mut self) -> CoreResult<(), DomainError> {
         WaylandShellSystem::run(self).map_err(|e| DomainError::Adapter {
             source: Box::new(e),
@@ -854,7 +862,7 @@ impl ShellSystemPort for WaylandShellSystem {
     }
 }
 
-impl WaylandSystemOps for WaylandShellSystem {
+impl<S> WaylandSystemOps<S> for WaylandShellSystem<S> {
     fn run(&mut self) -> Result<()> {
         WaylandShellSystem::run(self)
     }
@@ -926,15 +934,15 @@ impl WaylandSystemOps for WaylandShellSystem {
         self.state.count_lock_surfaces()
     }
 
-    fn app_state(&self) -> &AppState {
+    fn app_state(&self) -> &AppState<S> {
         WaylandShellSystem::app_state(self)
     }
 
-    fn app_state_mut(&mut self) -> &mut AppState {
+    fn app_state_mut(&mut self) -> &mut AppState<S> {
         WaylandShellSystem::app_state_mut(self)
     }
 
-    fn event_loop_handle(&self) -> LoopHandle<'static, AppState> {
+    fn event_loop_handle(&self) -> LoopHandle<'static, AppState<S>> {
         WaylandShellSystem::event_loop_handle(self)
     }
 

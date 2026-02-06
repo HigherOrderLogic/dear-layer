@@ -13,7 +13,7 @@ use crate::wayland::surfaces::app_state::AppState;
 
 type SessionLockCallback = Rc<dyn Fn(&[Value]) -> Value>;
 
-pub trait WaylandSystemOps {
+pub trait WaylandSystemOps<S> {
     fn run(&mut self) -> Result<()>;
 
     fn spawn_surface(&mut self, config: &ShellSurfaceConfig) -> Result<Vec<OutputHandle>>;
@@ -50,11 +50,11 @@ pub trait WaylandSystemOps {
 
     fn count_lock_surfaces(&self) -> usize;
 
-    fn app_state(&self) -> &AppState;
+    fn app_state(&self) -> &AppState<S>;
 
-    fn app_state_mut(&mut self) -> &mut AppState;
+    fn app_state_mut(&mut self) -> &mut AppState<S>;
 
-    fn event_loop_handle(&self) -> LoopHandle<'static, AppState>;
+    fn event_loop_handle(&self) -> LoopHandle<'static, AppState<S>>;
 
     fn component_instance(&self) -> Result<&ComponentInstance>;
 }

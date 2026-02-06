@@ -67,11 +67,11 @@ impl SessionLockContext {
     }
 }
 
-pub struct LockSurfaceParams<'a> {
+pub struct LockSurfaceParams<'a, S> {
     pub compositor: &'a WlCompositor,
     pub output: &'a WlOutput,
     pub session_lock: &'a ExtSessionLockV1,
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
-    pub queue_handle: &'a QueueHandle<AppState>,
+    pub queue_handle: &'a QueueHandle<AppState<S>>,
 }

@@ -21,7 +21,7 @@ pub struct LockSurface {
 }
 
 impl LockSurface {
-    pub fn create(params: &LockSurfaceParams<'_>) -> Self {
+    pub fn create<S>(params: &LockSurfaceParams<'_, S>) -> Self {
         let surface = Rc::new(params.compositor.create_surface(params.queue_handle, ()));
 
         let session_surface = Rc::new(params.session_lock.get_lock_surface(

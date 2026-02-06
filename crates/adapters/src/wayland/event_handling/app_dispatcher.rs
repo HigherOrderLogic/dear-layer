@@ -9,17 +9,17 @@ use smithay_client_toolkit::reexports::protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::ZwlrLayerShellV1,
     zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
 };
-use std::os::fd::AsFd;
+use std::{os::fd::AsFd, sync::Arc};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
+    backend::ObjectData,
     globals::GlobalListContents,
     protocol::{
         wl_compositor::WlCompositor,
         wl_keyboard::{self, WlKeyboard},
         wl_output::{self, WlOutput},
         wl_pointer::{self, WlPointer},
-        wl_registry::Event,
-        wl_registry::WlRegistry,
+        wl_registry::{Event, WlRegistry},
         wl_seat::WlSeat,
         wl_surface::WlSurface,
     },
@@ -43,7 +43,28 @@ use wayland_protocols::xdg::shell::client::{
     xdg_wm_base::{self, XdgWmBase},
 };
 
-impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
+impl<S, P, D> Dispatch<P, D> for AppState<S>
+where
+    P: Proxy,
+    S: Dispatch<P, D, Self>,
+{
+    fn event(
+        state: &mut Self,
+        proxy: &P,
+        event: <P as Proxy>::Event,
+        data: &D,
+        conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        <S as Dispatch<P, D, Self>>::event(state, proxy, event, data, conn, qhandle)
+    }
+
+    fn event_created_child(opcode: u16, qhandle: &QueueHandle<Self>) -> Arc<dyn ObjectData> {
+        <S as Dispatch<P, D, Self>>::event_created_child(opcode, qhandle)
+    }
+}
+
+impl<S> Dispatch<ZwlrLayerSurfaceV1, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         layer_surface: &ZwlrLayerSurfaceV1,
@@ -85,8 +106,8 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for AppState {
     }
 }
 
-impl Dispatch<WlOutput, ()> for AppState {
-    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+impl<S> Dispatch<WlOutput, ()> for AppState<S> {
+    #[allow(clippy::cognitive_complexity)]
     fn event(
         state: &mut Self,
         proxy: &WlOutput,
@@ -204,8 +225,8 @@ impl Dispatch<WlOutput, ()> for AppState {
     }
 }
 
-fn handle_pointer_enter_event(
-    state: &mut AppState,
+fn handle_pointer_enter_event<S>(
+    state: &mut AppState<S>,
     serial: u32,
     surface: &WlSurface,
     surface_x: f64,
@@ -236,7 +257,7 @@ fn handle_pointer_enter_event(
     }
 }
 
-fn handle_pointer_motion_event(state: &mut AppState, surface_x: f64, surface_y: f64) {
+fn handle_pointer_motion_event<S>(state: &mut AppState<S>, surface_x: f64, surface_y: f64) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_pointer_motion(surface_x, surface_y) {
             return;
@@ -248,7 +269,7 @@ fn handle_pointer_motion_event(state: &mut AppState, surface_x: f64, surface_y: 
     }
 }
 
-fn handle_pointer_leave_event(state: &mut AppState) {
+fn handle_pointer_leave_event<S>(state: &mut AppState<S>) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_pointer_leave() {
             state.set_active_surface_key(None);
@@ -262,8 +283,8 @@ fn handle_pointer_leave_event(state: &mut AppState) {
     state.set_active_surface_key(None);
 }
 
-fn handle_pointer_button_event(
-    state: &mut AppState,
+fn handle_pointer_button_event<S>(
+    state: &mut AppState<S>,
     serial: u32,
     button: u32,
     button_state: WEnum<wl_pointer::ButtonState>,
@@ -279,7 +300,10 @@ fn handle_pointer_button_event(
     }
 }
 
-fn handle_pointer_axis_source_event(state: &mut AppState, axis_source: wl_pointer::AxisSource) {
+fn handle_pointer_axis_source_event<S>(
+    state: &mut AppState<S>,
+    axis_source: wl_pointer::AxisSource,
+) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_axis_source(axis_source) {
             return;
@@ -290,7 +314,12 @@ fn handle_pointer_axis_source_event(state: &mut AppState, axis_source: wl_pointe
     }
 }
 
-fn handle_pointer_axis_event(state: &mut AppState, time: u32, axis: wl_pointer::Axis, value: f64) {
+fn handle_pointer_axis_event<S>(
+    state: &mut AppState<S>,
+    time: u32,
+    axis: wl_pointer::Axis,
+    value: f64,
+) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_axis(axis, value) {
             return;
@@ -301,7 +330,11 @@ fn handle_pointer_axis_event(state: &mut AppState, time: u32, axis: wl_pointer::
     }
 }
 
-fn handle_pointer_axis_discrete_event(state: &mut AppState, axis: wl_pointer::Axis, discrete: i32) {
+fn handle_pointer_axis_discrete_event<S>(
+    state: &mut AppState<S>,
+    axis: wl_pointer::Axis,
+    discrete: i32,
+) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_axis_discrete(axis, discrete) {
             return;
@@ -312,7 +345,7 @@ fn handle_pointer_axis_discrete_event(state: &mut AppState, axis: wl_pointer::Ax
     }
 }
 
-fn handle_pointer_axis_stop_event(state: &mut AppState, time: u32, axis: wl_pointer::Axis) {
+fn handle_pointer_axis_stop_event<S>(state: &mut AppState<S>, time: u32, axis: wl_pointer::Axis) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_axis_stop(axis) {
             return;
@@ -323,7 +356,7 @@ fn handle_pointer_axis_stop_event(state: &mut AppState, time: u32, axis: wl_poin
     }
 }
 
-fn handle_pointer_frame_event(state: &mut AppState) {
+fn handle_pointer_frame_event<S>(state: &mut AppState<S>) {
     if let Some(manager) = state.lock_manager_mut() {
         if manager.handle_pointer_frame() {
             return;
@@ -335,7 +368,7 @@ fn handle_pointer_frame_event(state: &mut AppState) {
     }
 }
 
-impl Dispatch<WlPointer, ()> for AppState {
+impl<S> Dispatch<WlPointer, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         _proxy: &WlPointer,
@@ -385,7 +418,7 @@ impl Dispatch<WlPointer, ()> for AppState {
     }
 }
 
-impl Dispatch<WlKeyboard, ()> for AppState {
+impl<S> Dispatch<WlKeyboard, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         _proxy: &WlKeyboard,
@@ -437,7 +470,7 @@ impl Dispatch<WlKeyboard, ()> for AppState {
     }
 }
 
-impl Dispatch<WpFractionalScaleV1, ()> for AppState {
+impl<S> Dispatch<WpFractionalScaleV1, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         proxy: &WpFractionalScaleV1,
@@ -461,7 +494,7 @@ impl Dispatch<WpFractionalScaleV1, ()> for AppState {
     }
 }
 
-impl Dispatch<XdgWmBase, ()> for AppState {
+impl<S> Dispatch<XdgWmBase, ()> for AppState<S> {
     fn event(
         _state: &mut Self,
         xdg_wm_base: &XdgWmBase,
@@ -476,7 +509,7 @@ impl Dispatch<XdgWmBase, ()> for AppState {
     }
 }
 
-impl Dispatch<XdgPopup, ()> for AppState {
+impl<S> Dispatch<XdgPopup, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         xdg_popup: &XdgPopup,
@@ -537,7 +570,7 @@ impl Dispatch<XdgPopup, ()> for AppState {
     }
 }
 
-impl Dispatch<XdgSurface, ()> for AppState {
+impl<S> Dispatch<XdgSurface, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         xdg_surface: &XdgSurface,
@@ -560,7 +593,7 @@ impl Dispatch<XdgSurface, ()> for AppState {
     }
 }
 
-impl Dispatch<WlRegistry, GlobalListContents> for AppState {
+impl<S> Dispatch<WlRegistry, GlobalListContents> for AppState<S> {
     fn event(
         state: &mut Self,
         registry: &WlRegistry,
@@ -619,7 +652,7 @@ impl Dispatch<WlRegistry, GlobalListContents> for AppState {
     }
 }
 
-impl Dispatch<ExtSessionLockV1, ()> for AppState {
+impl<S> Dispatch<ExtSessionLockV1, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         _proxy: &ExtSessionLockV1,
@@ -645,7 +678,7 @@ impl Dispatch<ExtSessionLockV1, ()> for AppState {
     }
 }
 
-impl Dispatch<ExtSessionLockSurfaceV1, ()> for AppState {
+impl<S> Dispatch<ExtSessionLockSurfaceV1, ()> for AppState<S> {
     fn event(
         state: &mut Self,
         lock_surface: &ExtSessionLockSurfaceV1,
@@ -701,7 +734,7 @@ impl Dispatch<ExtSessionLockSurfaceV1, ()> for AppState {
 macro_rules! impl_empty_dispatch_app {
     ($(($t:ty, $u:ty)),+) => {
         $(
-            impl Dispatch<$t, $u> for AppState {
+            impl<S> Dispatch<$t, $u> for AppState<S> {
                 fn event(
                     _state: &mut Self,
                     _proxy: &$t,

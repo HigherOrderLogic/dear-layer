@@ -26,13 +26,13 @@ use crate::logger;
 
 use super::app_state::AppState;
 
-pub struct PopupSurfaceParams<'a> {
+pub struct PopupSurfaceParams<'a, S> {
     pub compositor: &'a WlCompositor,
     pub xdg_wm_base: &'a XdgWmBase,
     pub parent_layer_surface: &'a ZwlrLayerSurfaceV1,
     pub fractional_scale_manager: Option<&'a WpFractionalScaleManagerV1>,
     pub viewporter: Option<&'a WpViewporter>,
-    pub queue_handle: &'a QueueHandle<AppState>,
+    pub queue_handle: &'a QueueHandle<AppState<S>>,
     pub position: PopupPosition,
     pub output_bounds: DomainLogicalSize,
     pub constraint_adjustment: DomainConstraintAdjustment,
@@ -40,7 +40,7 @@ pub struct PopupSurfaceParams<'a> {
     pub scale_factor: f32,
 }
 
-pub struct PopupSurface {
+pub struct PopupSurface<S> {
     pub surface: Rc<WlSurface>,
     pub xdg_surface: Rc<XdgSurface>,
     pub xdg_popup: Rc<XdgPopup>,
@@ -50,11 +50,11 @@ pub struct PopupSurface {
     output_bounds: DomainLogicalSize,
     constraint_adjustment: DomainConstraintAdjustment,
     xdg_wm_base: Rc<XdgWmBase>,
-    queue_handle: QueueHandle<AppState>,
+    queue_handle: QueueHandle<AppState<S>>,
 }
 
-impl PopupSurface {
-    pub fn create(params: &PopupSurfaceParams<'_>) -> Self {
+impl<S> PopupSurface<S> {
+    pub fn create(params: &PopupSurfaceParams<'_, S>) -> Self {
         let surface = Rc::new(params.compositor.create_surface(params.queue_handle, ()));
 
         let xdg_surface = Rc::new(params.xdg_wm_base.get_xdg_surface(
@@ -117,7 +117,10 @@ impl PopupSurface {
     #[allow(clippy::cast_possible_wrap)]
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_precision_loss)]
-    fn create_positioner(params: &PopupSurfaceParams<'_>) -> XdgPositioner {
+    fn create_positioner<'a>(params: &PopupSurfaceParams<'a, S>) -> XdgPositioner
+    where
+        S: 'a,
+    {
         let positioner = params
             .xdg_wm_base
             .create_positioner(params.queue_handle, ());

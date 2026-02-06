@@ -37,7 +37,7 @@ use crate::wayland::session_lock::{
     LockCallback, LockPropertyOperation, OutputFilter, SessionLockManager,
 };
 
-pub type PerOutputSurface = SurfaceState;
+pub type PerOutputSurface<S> = SurfaceState<S>;
 type SessionLockCallback = Rc<dyn Fn(&[Value]) -> Value>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -55,14 +55,14 @@ impl ShellSurfaceKey {
     }
 }
 
-pub struct AppState {
+pub struct AppState<S> {
     global_context: Option<Rc<GlobalContext>>,
     known_outputs: Vec<WlOutput>,
     slint_platform: Option<Rc<CustomSlintPlatform>>,
     compilation_result: Option<Rc<CompilationResult>>,
     output_registry: OutputRegistry,
     output_mapping: OutputMapping,
-    surfaces: HashMap<ShellSurfaceKey, PerOutputSurface>,
+    surfaces: HashMap<ShellSurfaceKey, PerOutputSurface<S>>,
     surface_to_key: HashMap<ObjectId, ShellSurfaceKey>,
     surface_handle_to_name: HashMap<SurfaceHandle, String>,
     _pointer: ManagedWlPointer,
@@ -77,10 +77,11 @@ pub struct AppState {
     lock_manager: Option<SessionLockManager>,
     lock_callbacks: Vec<LockCallback>,
     lock_property_operations: Vec<LockPropertyOperation>,
-    queue_handle: Option<wayland_client::QueueHandle<AppState>>,
+    queue_handle: Option<wayland_client::QueueHandle<AppState<S>>>,
+    pub substate: S,
 }
 
-impl AppState {
+impl AppState<()> {
     pub fn new(
         pointer: ManagedWlPointer,
         keyboard: ManagedWlKeyboard,
@@ -109,6 +110,42 @@ impl AppState {
             lock_callbacks: Vec::new(),
             lock_property_operations: Vec::new(),
             queue_handle: None,
+            substate: (),
+        }
+    }
+}
+
+impl<S> AppState<S> {
+    pub fn new_with_substate(
+        pointer: ManagedWlPointer,
+        keyboard: ManagedWlKeyboard,
+        shared_serial: Rc<SharedPointerSerial>,
+        substate: S,
+    ) -> Self {
+        Self {
+            global_context: None,
+            known_outputs: Vec::new(),
+            slint_platform: None,
+            compilation_result: None,
+            output_registry: OutputRegistry::new(),
+            output_mapping: OutputMapping::new(),
+            surfaces: HashMap::new(),
+            surface_to_key: HashMap::new(),
+            surface_handle_to_name: HashMap::new(),
+            _pointer: pointer,
+            _keyboard: keyboard,
+            shared_pointer_serial: shared_serial,
+            output_manager: None,
+            registry_name_to_output_id: HashMap::new(),
+            active_surface_key: None,
+            keyboard_focus_key: None,
+            keyboard_input_state: KeyboardInputState::new(),
+            keyboard_state: KeyboardState::new(),
+            lock_manager: None,
+            lock_callbacks: Vec::new(),
+            lock_property_operations: Vec::new(),
+            queue_handle: None,
+            substate,
         }
     }
 
@@ -125,7 +162,7 @@ impl AppState {
         self.compilation_result = Some(compilation_result);
     }
 
-    pub fn set_queue_handle(&mut self, queue_handle: wayland_client::QueueHandle<AppState>) {
+    pub fn set_queue_handle(&mut self, queue_handle: wayland_client::QueueHandle<AppState<S>>) {
         self.queue_handle = Some(queue_handle);
     }
 
@@ -333,7 +370,7 @@ impl AppState {
     pub fn handle_output_added_for_lock(
         &mut self,
         output: &WlOutput,
-        queue_handle: &wayland_client::QueueHandle<AppState>,
+        queue_handle: &wayland_client::QueueHandle<AppState<S>>,
     ) -> Result<()> {
         if !self
             .known_outputs
@@ -960,7 +997,7 @@ impl AppState {
     }
 }
 
-impl RenderableSet for AppState {
+impl<S> RenderableSet for AppState<S> {
     fn render_all_dirty(&self) -> Result<()> {
         for surface in self.all_outputs() {
             surface
